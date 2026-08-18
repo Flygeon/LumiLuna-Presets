@@ -1,0 +1,57 @@
+name: Update Preset Index
+
+on:
+  schedule:
+    # 每整点运行一次
+    - cron: '0 * * * *'
+  workflow_dispatch:
+    # 手动触发更新
+
+permissions:
+  contents: write
+
+jobs:
+  update-index:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate index.json
+        run: |
+          # 扫描 presets/ 下所有 .json 文件（排除 index.json 自身）
+          # 提取每个文件的 name 和 description 字段，生成索引数组
+          echo '[' > presets/index.json
+          first=true
+          for f in presets/preset-*.json; do
+            if [ ! -f "$f" ]; then
+              continue
+            fi
+            name=$(jq -r '.name // empty' "$f")
+            desc=$(jq -r '.description // empty' "$f")
+            file=$(basename "$f")
+            if [ "$first" = true ]; then
+              first=false
+            else
+              echo ',' >> presets/index.json
+            fi
+            echo '  { "name": '"$(printf '%s' "$name" | jq -Rs .)"', "description": '"$(printf '%s' "$desc" | jq -Rs .)"', "file": '"$(printf '%s' "$file" | jq -Rs .)"' }' >> presets/index.json
+          done
+          echo ']' >> presets/index.json
+
+      - name: Check for changes
+        id: diff
+        run: |
+          if git diff --quiet presets/index.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit and push
+        if: steps.diff.outputs.changed == 'true'
+        run: |
+          git config user.name "LumiLuna Bot"
+          git config user.email "bot@lumiluna.app"
+          git add presets/index.json
+          git commit -m "chore: auto-update preset index"
+          git push
