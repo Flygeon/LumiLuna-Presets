@@ -1,6 +1,10 @@
 name: Update Preset Index
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'presets/preset-*.json'
   schedule:
     # 每整点运行一次
     - cron: '0 * * * *'
